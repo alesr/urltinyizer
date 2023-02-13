@@ -1,0 +1,90 @@
+---
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches: [ master ]
+
+jobs:
+  linter:
+    name: linter
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        fetch-depth: 1
+    - name: vet & fmt
+      run: make lint
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    name: unit-tests
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.20'
+
+      - uses: actions/cache@v2
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      
+      - name: unit tests
+        run: go test -v -race -vet=all -count=1 -timeout 60s ./...
+          
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    name: integration-tests
+
+    services:
+      postgres:
+        image: postgres:13.7-alpine3.16
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: ultinyizer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: run tests db migrations
+        run: make migrate
+
+      - name: setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.19'
+
+      - uses: actions/cache@v2
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      
+      - name: unit tests
+        run: |
+          go test -v -tags=integration -race -vet=all -count=1 -timeout 60s ./...
