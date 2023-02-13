@@ -5,14 +5,16 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 
-	"github.com/alesr/urltinyizer/helper"
 	"github.com/alesr/urltinyizer/internal/repository"
 	"github.com/alesr/urltinyizer/internal/service"
+	"github.com/jmoiron/sqlx"
+	"github.com/pressly/goose/v3"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +27,8 @@ func TestCreateShortURL(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	setupServerHelper(t, ctx)
+	db := setupHelper(t, ctx)
+	defer teardownDBHelper(t, db)
 
 	t.Run("create short url", func(t *testing.T) {
 		req, err := http.NewRequest(
@@ -72,7 +75,8 @@ func TestRedirectToLongURL(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	setupServerHelper(t, ctx)
+	db := setupHelper(t, ctx)
+	defer teardownDBHelper(t, db)
 
 	t.Run("redirect to long url", func(t *testing.T) {
 		// First create a short url
@@ -124,7 +128,8 @@ func TestGetStats(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	setupServerHelper(t, ctx)
+	db := setupHelper(t, ctx)
+	defer teardownDBHelper(t, db)
 
 	t.Run("get stats", func(t *testing.T) {
 		givenShortURL := url.PathEscape("http://shorturl/foobar")
@@ -202,8 +207,24 @@ func TestGetStats(t *testing.T) {
 	})
 }
 
-func setupServerHelper(t *testing.T, ctx context.Context) {
-	db := helper.SetupDB(t, "../migrations")
+const (
+	migrationsDir      string = "../migrations"
+	postgresDriverName string = "postgres"
+	dbHost             string = "localhost"
+	dbPort             string = "5432"
+	dbUser             string = "user"
+	dbPass             string = "password"
+	dbName             string = "urltinyizer"
+)
+
+func setupHelper(t *testing.T, ctx context.Context) *sqlx.DB {
+	db, err := sqlx.Open(postgresDriverName, fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		dbHost, dbPort, dbUser, dbPass, dbName),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, goose.Up(db.DB, migrationsDir))
 
 	repo := repository.NewPostgreSQL(zap.NewNop(), db)
 	service := service.NewServiceDefault(zap.NewNop(), "http://foo.com/", repo)
@@ -212,4 +233,11 @@ func setupServerHelper(t *testing.T, ctx context.Context) {
 	testApp.RegisterRoutes()
 
 	go testApp.Run(ctx)
+
+	return db
+}
+
+func teardownDBHelper(t *testing.T, db *sqlx.DB) {
+	require.NoError(t, goose.Reset(db.DB, migrationsDir))
+	require.NoError(t, db.Close())
 }

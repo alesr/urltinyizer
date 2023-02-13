@@ -5,16 +5,18 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
-	"github.com/alesr/urltinyizer/helper"
+	"github.com/jmoiron/sqlx"
+	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
 func TestGetShortURL(t *testing.T) {
-	db := helper.SetupDB(t, "../../migrations")
-	defer helper.TeardownDB(t, db)
+	db := setupDB(t)
+	defer teardownDB(t, db)
 
 	repo := NewPostgreSQL(zap.NewNop(), db)
 
@@ -30,8 +32,8 @@ func TestGetShortURL(t *testing.T) {
 }
 
 func TestGetLongURL(t *testing.T) {
-	db := helper.SetupDB(t, "../../migrations")
-	defer helper.TeardownDB(t, db)
+	db := setupDB(t)
+	defer teardownDB(t, db)
 
 	repo := NewPostgreSQL(zap.NewNop(), db)
 
@@ -47,8 +49,8 @@ func TestGetLongURL(t *testing.T) {
 }
 
 func TestSaveShortURL(t *testing.T) {
-	db := helper.SetupDB(t, "../../migrations")
-	defer helper.TeardownDB(t, db)
+	db := setupDB(t)
+	defer teardownDB(t, db)
 
 	repo := NewPostgreSQL(zap.NewNop(), db)
 
@@ -64,8 +66,8 @@ func TestSaveShortURL(t *testing.T) {
 }
 
 func TestGetStats(t *testing.T) {
-	db := helper.SetupDB(t, "../../migrations")
-	defer helper.TeardownDB(t, db)
+	db := setupDB(t)
+	defer teardownDB(t, db)
 
 	repo := NewPostgreSQL(zap.NewNop(), db)
 
@@ -82,4 +84,30 @@ func TestGetStats(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 1, stats)
+}
+
+const (
+	migrationsDir      string = "../../migrations"
+	postgresDriverName string = "postgres"
+	dbHost             string = "localhost"
+	dbPort             string = "5432"
+	dbUser             string = "user"
+	dbPass             string = "password"
+	dbName             string = "urltinyizer"
+)
+
+func setupDB(t *testing.T) *sqlx.DB {
+	db, err := sqlx.Open(postgresDriverName, fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		dbHost, dbPort, dbUser, dbPass, dbName),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, goose.Up(db.DB, migrationsDir))
+	return db
+}
+
+func teardownDB(t *testing.T, db *sqlx.DB) {
+	require.NoError(t, goose.Reset(db.DB, migrationsDir))
+	require.NoError(t, db.Close())
 }
