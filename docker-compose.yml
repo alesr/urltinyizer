@@ -1,0 +1,36 @@
+version: '3'
+services:
+  db:
+    image: postgres:15-alpine
+    networks:
+      - mynetwork
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: password
+      POSTGRES_USER: user
+      POSTGRES_DB: urltinyizer
+      port: 5432
+  urltinyizer:
+    build: .
+    environment:
+      - APP_HOST=http://localhost:8080/
+    networks:
+      - mynetwork
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    command: ./wait-for-it.sh db:5432 -- ./urltinyizer
+  test-it:
+    build: .
+    environment:
+      - APP_HOST=http://foo.com/
+    networks:
+      - mynetwork
+    depends_on:
+      - db
+    command: ./wait-for-it.sh db:5432 -- go install github.com/pressly/goose/v3/cmd/goose@latest -- go test -v -tags=integration -race -vet=all -count=1 -timeout 60s ./...
+
+networks:
+  mynetwork:
