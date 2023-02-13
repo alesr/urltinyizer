@@ -19,14 +19,21 @@ const (
 	saveShortURLQuery           string = "INSERT INTO urls (short_url, long_url) VALUES ($1, $2)"
 )
 
+// DB defines a interface with the methods from sqlx.DB struct.
+type db interface {
+	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
+	BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 // PostgreSQL is a repository that implements the Repository interface.
 type PostgreSQL struct {
 	logger *zap.Logger
-	dbConn *sqlx.DB
+	dbConn db
 }
 
 // NewPostgreSQL creates a new PostgreSQL repository.
-func NewPostgreSQL(logger *zap.Logger, dbConn *sqlx.DB) *PostgreSQL {
+func NewPostgreSQL(logger *zap.Logger, dbConn db) *PostgreSQL {
 	return &PostgreSQL{
 		logger: logger,
 		dbConn: dbConn,
