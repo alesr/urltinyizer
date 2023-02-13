@@ -11,22 +11,22 @@ help:
 	@grep -E '^[a-zA-Z0-9_/%\-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: build
-build: ## Build the project
+build: ## Build the application
 	@GOOS=linux go build -o $(NAME) main.go
 
 .PHONY: run
-run: build ## Run the project on a Docker container
+run: build ## Run the application on a Docker container (requires Docker)
 	@[ -f $(AWAIT_DB_SCRIPT) ] || curl -o $(AWAIT_DB_SCRIPT) "https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh"
 	@chmod +x $(AWAIT_DB_SCRIPT)
 	@docker-compose -f docker-compose.yml up db urltinyizer --force-recreate --build
 
 .PHONY: lint
-lint: ## Run linter
+lint: ## Run go vet and go fmt
 	@go vet ./...
 	@go fmt ./...
 
 .PHONY: test-it
-test-it: ## Run integration tests
+test-it: ## Run integration tests (requires Docker)
 	@docker-compose -f docker-compose.yml up -d db
 	@sleep 3
 	@go test -v -tags=integration -race -vet=all -count=1 -timeout 60s ./...
@@ -36,7 +36,5 @@ test-it: ## Run integration tests
 test-unit: ## Run unit tests
 	@go test -v -race -vet=all -count=1 -timeout 60s ./...
 
-.PHONY: test
+.PHONY: test ## Run all tests (lint, unit and integration)
 test: lint test-unit test-it ## Run all tests
-
-
